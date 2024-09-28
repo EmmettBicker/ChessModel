@@ -1,0 +1,10 @@
+Layer                                            Output Shape                   Params    
+======================================================================
+layers (MHA) <CausalMHAAndMLPBlock>              torch.Size([1, 256, 768])      2362368
+layers (Feed Forward) <CausalMHAAndMLPBlock>     torch.Size([1, 256, 768])      3148544
+layers (MHA) <CausalMHAAndMLPBlock>              torch.Size([1, 256, 768])      2362368
+layers (Feed Forward) <CausalMHAAndMLPBlock>     torch.Size([1, 256, 768])      3148544
+layers (MHA) <CausalMHAAndMLPBlock>              torch.Size([1, 256, 768])      2362368
+layers (Feed Forward) <CausalMHAAndMLPBlock>     torch.Size([1, 256, 768])      3148544
+======================================================================
+Total parameters: 16532736

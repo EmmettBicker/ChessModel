@@ -6,19 +6,37 @@ from transformers import BertTokenizer, BertModel
 from py_get_bert_word_embeddings import EmbeddingFromSentence
 
 MAX_SEQUENCE_LENGTH = 512
-this_is_my_string = ["What's cracking guys this is yubboi jabroni back it again with another dress to impress special video",
-                     "what's 2+2"]
-
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-embedder = EmbeddingFromSentence(max_sequence_length=MAX_SEQUENCE_LENGTH)
+# Pytorch's   positional encoding implementaiton
+class PositionalEncoding(nn.Module):
 
-embeddings, attention_mask, _ = embedder.get_embeddings_from_sentence(this_is_my_string)
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 512):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
 
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-torch.math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Arguments:
+            x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
+        """
+        x = x + self.pe[:x.size(0)]
+        return self.dropout(x)
+    
+    
 class CausalMHAAndMLPBlock(nn.Module):
     def __init__(self, max_sequence_length, n_head=8, d_embed=768, feed_forward_dim=2048, dropout=0):
         super().__init__()
+        
+        self.positional_encoding = PositionalEncoding(d_embed)
         self.mha = nn.MultiheadAttention(d_embed, n_head, dropout=dropout, batch_first=True)
         self.causal_mha = self.CausalMHABlock(max_sequence_length)
         self.feed_forward = nn.Sequential(
@@ -36,6 +54,7 @@ class CausalMHAAndMLPBlock(nn.Module):
         return self.forward(l_embeds, padding_mask)
     
     def forward(self, l_embeds: torch.Tensor, padding_mask: torch.Tensor):
+        l_embeds = self.positional_encoding(l_embeds)
         l_embeds = self.dropout(self.causal_mha(l_embeds, padding_mask)) + l_embeds
         l_embeds = self.norm1(l_embeds)
         
@@ -66,7 +85,8 @@ class ChessModel(nn.Module):
     def __init__(self, max_sequence_length, vocab_size=370, num_layers=3, n_head=8, d_embed=768, feed_forward_dim = 2048, dropout=0):
         super().__init__()
         self.d_embed = d_embed
-        self.embedder = embedder
+        self.embedder = EmbeddingFromSentence(max_sequence_length=MAX_SEQUENCE_LENGTH)
+
         self.out_linear = nn.Linear(self.d_embed, vocab_size)
         self.softmax = nn.Softmax(dim=-1)
         self.layers = nn.ModuleList(
@@ -78,7 +98,7 @@ class ChessModel(nn.Module):
        
         
     def forward_text(self, sentences: torch.Tensor):
-        embeddings, attention_mask, _ = embedder.get_embeddings_from_sentence(sentences)
+        embeddings, attention_mask, _ = self.embedder.get_embeddings_from_sentence(sentences)
         padding_mask = attention_mask.eq(0)
         for layer in self.layers:
             embeddings = layer(embeddings, padding_mask)
